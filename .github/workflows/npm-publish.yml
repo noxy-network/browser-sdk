@@ -40,6 +40,8 @@ jobs:
           node-version: "20"
           cache: "pnpm"
           registry-url: "https://registry.npmjs.org"
+          scope: "@noxy-network"
+          always-auth: true
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
