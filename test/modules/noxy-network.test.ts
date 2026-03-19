@@ -181,6 +181,7 @@ describe('NoxyNetworkModule', () => {
       const writtenData = mockWebSocket?.getWrittenData();
       expect(writtenData).toHaveLength(1);
       const parsed = JSONParse(new TextDecoder().decode(writtenData![0]));
+      expect(parsed.payload.type).toBe('browser');
       expect(parsed.payload.devicePubkeys).toBeDefined();
       expect(parsed.payload.walletAddress).toBe(mocks.testDevice.identityId);
       expect(networkModule.sessionId).toBe('announce-session-id');

@@ -9,30 +9,6 @@ export type { NoxyIdentity, NoxyEoaWalletIdentity, NoxyScwWalletIdentity } from 
 export { NoxyIdentityTypeEnum } from '@/modules/noxy-identity.types';
 export { NoxyClientOptionsSchema, NoxyNetworkOptionsSchema, NoxyStorageOptionsSchema } from '@/modules/noxy-client.schema';
 
-/**
- * Create and initialize a Noxy client instance
- *
- * @param options - Client configuration options (validated against schema)
- * @returns Initialized NoxyClientModule instance
- * @throws {Error} If options validation fails
- *
- * @example
- * ```typescript
- * const client = await createNoxyClient({
- *   identity: {
- *     type: 'eoa',
- *     address: '0x...',
- *     publicKey: '0x...',
- *     publicKeyType: 'secp256k1',
- *     signer: async (data) => wallet.signMessage({ message: { raw: data } })
- *   },
- *   network: {
- *     relayNodesUrl: 'wss://relay.noxy.network',
- *     appId: 'your-app-id'
- *   }
- * });
- * ```
- */
 export async function createNoxyClient(options: NoAny<NoxyClientOptions>) {
   const result = NoxyClientOptionsSchema.safeParse(options);
 

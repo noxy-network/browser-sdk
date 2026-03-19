@@ -303,7 +303,7 @@ export class NoxyNetworkModule {
         devicePubkeys: payload.devicePubkeys,
         walletAddress: device.identityId,
         signature: base64.encode(device.identitySignature as Uint8Array),
-      } as NoxyNetworkAnnounceDevicePayload);
+      });
     } else {
       this.#sessionId = response!.authenticate?.sessionId;
       this.#networkDeviceId = response!.authenticate?.deviceId;
@@ -321,7 +321,7 @@ export class NoxyNetworkModule {
       appId: this.#options.appId,
       timestamp: Date.now(),
       nonce: nonceB64,
-      payload,
+      payload: { ...payload, type: 'browser' as const },
     });
 
     const reader = this.#stream!.readable.getReader();

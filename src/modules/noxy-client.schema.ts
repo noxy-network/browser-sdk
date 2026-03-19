@@ -80,11 +80,6 @@ export const NoxyNetworkOptionsSchema = z.object({
   maxRetries: z.number().int().nonnegative().optional(),
   retryTimeoutMs: z.number().int().positive().optional(),
   requireAck: z.boolean().optional(),
-  api: z.object({
-    url: z.string().url('API URL must be valid').optional(),
-    allowEnvelopeRouting: z.boolean().optional(),
-    allowPushHints: z.boolean().optional(),
-  }).optional(),
 });
 
 /**

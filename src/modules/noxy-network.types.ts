@@ -57,6 +57,7 @@ export type NoxyNetworkAuthenticateResponse = {
 };
 
 export type NoxyNetworkAnnounceDevicePayload = {
+  type?: 'browser'; // Optional for callers; SDK always sends 'browser' when announcing
   devicePubkeys: {
     publicKey: string; // base64 encoded
     pqPublicKey: string; // base64 encoded

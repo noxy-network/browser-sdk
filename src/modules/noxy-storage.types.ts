@@ -21,6 +21,8 @@ export type NoxyStorageOptions = {
 export enum NoxyLocalStorageCollection {
   DEVICES = 'noxy:devices',
   DEVICE_KEYS = 'noxy:device-keys',
+  /** Internal store for auto-generated encryption key (when user omits encryptionKey) */
+  ENCRYPTION_KEY = 'noxy:encryption-key',
 }
 
 /**
@@ -29,6 +31,15 @@ export enum NoxyLocalStorageCollection {
 export type NoxyLocalStorageCollectionType =
   | NoxyLocalStorageCollection.DEVICES
   | NoxyLocalStorageCollection.DEVICE_KEYS
+  | NoxyLocalStorageCollection.ENCRYPTION_KEY;
+
+/**
+ * Record stored in ENCRYPTION_KEY store for persisting auto-generated key
+ */
+export type NoxyEncryptionKeyRecord = {
+  id: string;
+  key: ArrayBuffer;
+};
 
 /**
  * Browser IndexedDB schema
@@ -37,6 +48,7 @@ export interface NoxyLocalStorageSchema {
   objectStoreNames: {
     [NoxyLocalStorageCollection.DEVICES]: NoxyDeviceSchema;
     [NoxyLocalStorageCollection.DEVICE_KEYS]: NoxyDeviceKeysSchema;
+    [NoxyLocalStorageCollection.ENCRYPTION_KEY]: NoxyEncryptionKeyRecord;
   };
 }
 
@@ -115,6 +127,7 @@ export type NoxyLocalStorageConfigType = {
  * Local storage configuration
  * DEVICES and DEVICE_KEYS use keyPath pk only.
  * identity_fk index on DEVICES allows fetching all devices by identityId.
+ * ENCRYPTION_KEY stores auto-generated AES key when user omits encryptionKey.
  */
 export const NOXY_LOCAL_STORAGE_CONFIG: readonly NoxyLocalStorageConfigType[] = [
   {
@@ -132,4 +145,11 @@ export const NOXY_LOCAL_STORAGE_CONFIG: readonly NoxyLocalStorageConfigType[] = 
     name: NoxyLocalStorageCollection.DEVICE_KEYS,
     options: { keyPath: 'pk' },
   },
+  {
+    name: NoxyLocalStorageCollection.ENCRYPTION_KEY,
+    options: { keyPath: 'id' },
+  },
 ] as const;
+
+/** Primary key for the default encryption key record */
+export const NOXY_ENCRYPTION_KEY_ID = 'default' as const;
