@@ -153,9 +153,9 @@ describe('NoxyClientModule', () => {
 
     const networkModule = (client as any).NoxyNetworkModule;
     vi.spyOn(networkModule, 'subscribeToDecisionRequests').mockImplementation(async (fn: unknown) => {
-      await (fn as (ctx: { messageId?: string; pushEvent: NoxyEncryptedDecisionRequest }) => Promise<void>)({
+      await (fn as (ctx: { messageId?: string; decisionEvent: NoxyEncryptedDecisionRequest }) => Promise<void>)({
         messageId: 'relay-msg-1',
-        pushEvent: encrypted,
+        decisionEvent: encrypted,
       });
     });
 
@@ -166,19 +166,20 @@ describe('NoxyClientModule', () => {
     await client.on(handler);
 
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0][0]).toEqual(plainDecision);
+    expect(handler.mock.calls[0][0]).toBe('relay-msg-1');
+    expect(handler.mock.calls[0][1]).toEqual(plainDecision);
     expect(sendDecisionOutcome).not.toHaveBeenCalled();
 
     await client.submitDecisionOutcome({
-      decision_id: 'decision-test-1',
+      decisionId: 'decision-test-1',
       outcome: NoxyDecisionOutcomeValues.APPROVE,
-      received_at: Date.now(),
+      receivedAt: Date.now(),
     });
 
     expect(sendDecisionOutcome).toHaveBeenCalledWith({
-      decision_id: 'decision-test-1',
+      decisionId: 'decision-test-1',
       outcome: 'APPROVE',
-      received_at: expect.any(Number),
+      receivedAt: expect.any(Number),
     });
 
     await client.close();
