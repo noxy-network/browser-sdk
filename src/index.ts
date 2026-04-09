@@ -8,6 +8,8 @@ export type { NoxyClientOptions } from '@/modules/noxy-client.types';
 export type { NoxyIdentity, NoxyEoaWalletIdentity, NoxyScwWalletIdentity } from '@/modules/noxy-identity.types';
 export { NoxyIdentityTypeEnum } from '@/modules/noxy-identity.types';
 export { NoxyClientOptionsSchema, NoxyNetworkOptionsSchema, NoxyStorageOptionsSchema } from '@/modules/noxy-client.schema';
+export type { NoxyDecisionOutcome, NoxyDecisionOutcomeValue } from '@/modules/noxy-decision-request.types';
+export { NoxyDecisionOutcomeValues } from '@/modules/noxy-decision-request.types';
 
 export async function createNoxyClient(options: NoAny<NoxyClientOptions>) {
   const result = NoxyClientOptionsSchema.safeParse(options);

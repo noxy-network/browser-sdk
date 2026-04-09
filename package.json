@@ -1,7 +1,7 @@
 {
   "name": "@noxy-network/browser-sdk",
-  "version": "1.0.0",
-  "description": "Secure, private, wallet-native push notifications for Web3.",
+  "version": "2.0.0",
+  "description": "Browser SDK for AI agent runtimes: Noxy Decision Layer — encrypted decision requests, APPROVE/REJECT outcomes, wallet identity.",
   "author": "Noxy Network",
   "license": "MIT",
   "keywords": [

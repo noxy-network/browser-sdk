@@ -5,8 +5,8 @@ import { NoxyInjectModule } from '@/modules/noxy-common.inject';
 import { NoxyDeviceModule } from '@/modules/noxy-device';
 import { NoxyGeneralError } from '@/modules/noxy-error';
 import type { NoAny } from '@/modules/noxy-common.types';
-import type { NoxyEncryptedNotification } from '@/modules/noxy-notification.types';
-import { randomBytes } from '@noble/hashes/utils.js';
+import type { NoxyEncryptedDecisionRequest } from '@/modules/noxy-decision-request.types';
+import type { UUIDTypes } from 'uuid';
 import { hkdf } from '@noble/hashes/hkdf.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { gcm } from '@noble/ciphers/webcrypto.js';
@@ -14,19 +14,19 @@ import { NoxyKyberProvider } from '@/modules/noxy-kyber.provider';
 
 @NoxyInjectModule(NoxyKyberProvider, () => ({}))
 @NoxyInjectModule(NoxyDeviceModule, (options: NoxyStorageOptions) => options)
-export class NoxyNotificationModule {
-  private static instance: Promise<NoxyNotificationModule> | undefined = undefined;
+export class NoxyDecisionRequestModule {
+  private static instance: Promise<NoxyDecisionRequestModule> | undefined = undefined;
 
   private constructor(options: NoxyStorageOptions) {}
 
-  static async create(options: NoAny<NoxyStorageOptions>): Promise<NoxyNotificationModule> {
-    if (NoxyNotificationModule.instance !== undefined) return NoxyNotificationModule.instance;
-    NoxyNotificationModule.instance = (async () => {
-      const inst = new NoxyNotificationModule(options);
+  static async create(options: NoAny<NoxyStorageOptions>): Promise<NoxyDecisionRequestModule> {
+    if (NoxyDecisionRequestModule.instance !== undefined) return NoxyDecisionRequestModule.instance;
+    NoxyDecisionRequestModule.instance = (async () => {
+      const inst = new NoxyDecisionRequestModule(options);
       await (inst as any).__initAllModules;
       return inst;
     })();
-    return NoxyNotificationModule.instance;
+    return NoxyDecisionRequestModule.instance;
   }
 
   get #noxyDeviceModule(): NoxyDeviceModule {
@@ -37,50 +37,27 @@ export class NoxyNotificationModule {
     return (this as any).NoxyKyberProvider as NoxyKyberProvider;
   }
 
-  /**
-   * Encrypt a notification
-   * This performs the actual encryption operation
-   * @param payload - The notification payload to encrypt
-   * @returns The encrypted notification
-   */
-  async encryptNotification(plaintext: Uint8Array): Promise<NoxyEncryptedNotification> {
-    const devicePQPublicKey = this.#noxyDeviceModule.pqPublicKey;
-    if (!devicePQPublicKey) {
-      throw new NoxyGeneralError({ message: 'Device cannot encrypt notification' });
+  resolveDecisionRequestId(decision: unknown, messageId?: string | UUIDTypes): string {
+    if (decision && typeof decision === 'object') {
+      const o = decision as Record<string, unknown>;
+      if (typeof o.decision_id === 'string') return o.decision_id;
+      if (typeof o.decisionId === 'string') return o.decisionId;
     }
-
-    const { ciphertext: kyberCt, sharedSecret } = this.#noxyKyberProvider.encapsulate(devicePQPublicKey);
-
-    // Derive symmetric key (HKDF)
-    const key = hkdf(sha256, sharedSecret, undefined, undefined, 32);
-
-    const nonce = randomBytes(12);
-
-    const cipher = gcm(key, nonce);
-    const ciphertext = await cipher.encrypt(plaintext);
-
-    return {
-      kyber_ct: kyberCt,
-      nonce,
-      ciphertext,
-    };
+    if (messageId !== undefined && messageId !== null) return String(messageId);
+    throw new NoxyGeneralError({
+      message: 'Decision ID could not be resolved',
+    });
   }
 
-  /**
-   * Decrypt a notification
-   * @param data - The encrypted notification (kyber_ct, nonce, ciphertext)
-   * @returns The decrypted notification
-   */
-  async decryptNotification(data: NoxyEncryptedNotification): Promise<any> {
+  async decryptDecisionRequest(data: NoxyEncryptedDecisionRequest): Promise<any> {
     const devicePrivateKeys = await this.#noxyDeviceModule.loadDevicePrivateKeys();
     const devicePrivateKey = devicePrivateKeys?.pqPrivateKey;
     if (!devicePrivateKey) {
-      throw new NoxyGeneralError({ message: 'Device cannot decrypt notification' });
+      throw new NoxyGeneralError({ message: 'Device cannot decrypt decision request' });
     }
 
-    // Coerce to Uint8Array; relay may send camelCase (kyberCt) and base64 strings
     const toBytes = (v: Uint8Array | string | number[] | undefined, name: string): Uint8Array => {
-      if (v === undefined) throw new NoxyGeneralError({ message: `Missing ${name} in encrypted notification` });
+      if (v === undefined) throw new NoxyGeneralError({ message: `Missing ${name} in encrypted decision request` });
       if (v instanceof Uint8Array) return v;
       if (typeof v === 'string') return base64.decode(v);
       return new Uint8Array(v);

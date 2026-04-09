@@ -79,7 +79,6 @@ export const NoxyNetworkOptionsSchema = z.object({
   appId: z.string().min(1, 'App ID is required'),
   maxRetries: z.number().int().nonnegative().optional(),
   retryTimeoutMs: z.number().int().positive().optional(),
-  requireAck: z.boolean().optional(),
 });
 
 /**

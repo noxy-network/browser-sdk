@@ -136,18 +136,18 @@ describe('NoxyNetworkModule', () => {
     });
   });
 
-  describe('subscribeToNotifications', () => {
+  describe('subscribeToDecisionRequests', () => {
     it('should throw NoxyNetworkError when not connected', async () => {
       const handler = vi.fn();
-      await expect(networkModule.subscribeToNotifications(handler)).rejects.toThrow(NoxyNetworkError);
-      await expect(networkModule.subscribeToNotifications(handler)).rejects.toThrow('not connected');
+      await expect(networkModule.subscribeToDecisionRequests(handler)).rejects.toThrow(NoxyNetworkError);
+      await expect(networkModule.subscribeToDecisionRequests(handler)).rejects.toThrow('not connected');
     });
 
     it('should throw when connected but not authenticated', async () => {
       await networkModule.connect();
       const handler = vi.fn();
-      await expect(networkModule.subscribeToNotifications(handler)).rejects.toThrow(NoxyNetworkError);
-      await expect(networkModule.subscribeToNotifications(handler)).rejects.toThrow('not authenticated');
+      await expect(networkModule.subscribeToDecisionRequests(handler)).rejects.toThrow(NoxyNetworkError);
+      await expect(networkModule.subscribeToDecisionRequests(handler)).rejects.toThrow('not authenticated');
     });
   });
 

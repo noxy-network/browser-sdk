@@ -1,10 +1,10 @@
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, type UUIDTypes } from 'uuid';
 import { JSONParse, JSONStringify } from 'json-with-bigint';
-import type { NoxyNetworkAckPayload, NoxyNetworkAnnounceDevicePayload, NoxyNetworkAnnounceDeviceResponse, NoxyNetworkAuthenticatePayload, NoxyNetworkAuthenticateResponse, NoxyNetworkErrorResponse, NoxyNetworkOptions, NoxyNetworkRevokeDevicePayload, NoxyNetworkRotateDeviceKeysPayload } from '@/modules/noxy-network.types';
+import type { NoxyNetworkAckPayload, NoxyNetworkAnnounceDevicePayload, NoxyNetworkAnnounceDeviceResponse, NoxyNetworkAuthenticatePayload, NoxyNetworkAuthenticateResponse, NoxyNetworkDecisionOutcomePayload, NoxyNetworkErrorResponse, NoxyNetworkOptions, NoxyNetworkRevokeDevicePayload, NoxyNetworkRotateDeviceKeysPayload } from '@/modules/noxy-network.types';
 import { isNoxyNetworkErrorResponse } from '@/modules/noxy-network.types';
 import type { NoxyNetworkMessage } from '@/modules/noxy-network.types';
 import type { NoxyDeviceId, NoxyDevice } from '@/modules/noxy-device.types';
-import type { NoxyEncryptedNotification } from '@/modules/noxy-notification.types';
+import type { NoxyEncryptedDecisionRequest } from '@/modules/noxy-decision-request.types';
 import { NoxyClientOptions } from '@/modules/noxy-client.types';
 import { NOXY_NETWORK_MAX_RETRIES_DEFAULT, NOXT_NETWORK_RETRY_TIMEOUT_DEFAULT } from '@/modules/noxy-common.constants';
 import { NoxyNetworkError } from '@/modules/noxy-error';
@@ -208,6 +208,10 @@ export class NoxyNetworkModule {
     }
   }
 
+  private generateNonce(): string {
+    return base64.encode(randomBytes(12));
+  }
+
   /**
    * Send a message to the noxy network
    */
@@ -219,7 +223,6 @@ export class NoxyNetworkModule {
         operation: NoxyNetworkErrorOperationEnum.SEND_MESSAGE,
       });
     }
-
     try {
       const writer = this.#stream?.writable.getWriter();
       try {
@@ -240,14 +243,13 @@ export class NoxyNetworkModule {
    * Acknowledge a notification on the network
    */
   private async acknowledgeNotification(payload: NoxyNetworkAckPayload): Promise<void> {
-    const nonceB64 = base64.encode(randomBytes(12));
-    await this.sendNetworkMessage({
+    return this.sendNetworkMessage({
       requestId: uuidv4(),
       sessionId: this.#sessionId,
       appId: this.#options.appId,
       deviceId: this.#networkDeviceId,
       timestamp: Date.now(),
-      nonce: nonceB64,
+      nonce: this.generateNonce(),
       payload,
     });
   }
@@ -264,13 +266,11 @@ export class NoxyNetworkModule {
       },
     };
 
-    const nonceB64 = base64.encode(randomBytes(12));
-
     await this.sendNetworkMessage({
       requestId: uuidv4(),
       appId: this.#options.appId,
       timestamp: Date.now(),
-      nonce: nonceB64,
+      nonce: this.generateNonce(),
       payload,
     });
 
@@ -314,13 +314,12 @@ export class NoxyNetworkModule {
    * Announce device on the network
    */
   async announceDevice(payload: NoxyNetworkAnnounceDevicePayload): Promise<void> {
-    const nonceB64 = base64.encode(randomBytes(12));
     await this.sendNetworkMessage({
       requestId: uuidv4(),
       sessionId: this.#sessionId,
       appId: this.#options.appId,
       timestamp: Date.now(),
-      nonce: nonceB64,
+      nonce: this.generateNonce(),
       payload: { ...payload, type: 'browser' as const },
     });
 
@@ -355,14 +354,13 @@ export class NoxyNetworkModule {
    * Revoke a device on the network
    */
   async revokeDevice(payload: NoxyNetworkRevokeDevicePayload): Promise<void> {
-    const nonceB64 = base64.encode(randomBytes(12));
     await this.sendNetworkMessage({
       requestId: uuidv4(),
       sessionId: this.#sessionId,
       appId: this.#options.appId,
       deviceId: this.#networkDeviceId,
       timestamp: Date.now(),
-      nonce: nonceB64,
+      nonce: this.generateNonce(),
       payload,
     });
   }
@@ -371,27 +369,28 @@ export class NoxyNetworkModule {
    * Rotate the device keys on the network
    */
   async rotateDeviceKeys(payload: NoxyNetworkRotateDeviceKeysPayload): Promise<void> {
-    const nonceB64 = base64.encode(randomBytes(12));
     await this.sendNetworkMessage({
       requestId: uuidv4(),
       sessionId: this.#sessionId,
       appId: this.#options.appId,
       deviceId: this.#networkDeviceId,
       timestamp: Date.now(),
-      nonce: nonceB64,
+      nonce: this.generateNonce(),
       payload,
     });
   }
 
   /**
-   * Subscribe and continuously listen for encrypted notifications from the network.
-   * Uses async iteration which is event-driven and non-blocking.
+   * Subscribe and listen for encrypted decision requests from the relay (async iteration).
+   * Handler receives `messageId` (for correlation) and encrypted `decisionEvent` payload.
    */
-  async subscribeToNotifications(handler: (notification: NoxyEncryptedNotification) => Promise<void>): Promise<void> {
+  async subscribeToDecisionRequests(
+    handler: (ctx: { messageId?: UUIDTypes; decisionEvent: NoxyEncryptedDecisionRequest }) => Promise<void>
+  ): Promise<void> {
     if (!this.isConnected || !this.#stream?.readable) {
       throw new NoxyNetworkError({
         code: 'NOT_CONNECTED',
-        message: 'Cannot subscribe to notifications: not connected to any relay node',
+        message: 'Cannot subscribe to decision requests: not connected to any relay node',
         operation: NoxyNetworkErrorOperationEnum.PUSH_RECEIVED,
       });
     }
@@ -399,48 +398,56 @@ export class NoxyNetworkModule {
     if (!this.#sessionId || !this.#networkDeviceId) {
       throw new NoxyNetworkError({
         code: 'NOT_AUTHENTICATED',
-        message: 'Cannot subscribe to notifications: not authenticated',
+        message: 'Cannot subscribe to decision requests: not authenticated',
         operation: NoxyNetworkErrorOperationEnum.PUSH_RECEIVED,
       });
     }
 
     try {
-      const nonceB64 = base64.encode(randomBytes(12));
       await this.sendNetworkMessage({
         requestId: uuidv4(),
         sessionId: this.#sessionId,
         appId: this.#options.appId,
         deviceId: this.#networkDeviceId,
         timestamp: Date.now(),
-        nonce: nonceB64,
+        nonce: this.generateNonce(),
         payload: { subscribe: true },
       });
 
-      // Async iteration is event-driven and doesn't busy-wait
       for await (const chunk of this.#stream.readable) {
         try {
           const envelope = JSONParse(new TextDecoder().decode(chunk));
-          if (envelope?.pushEvent?.ciphertext) {
-            if (this.#options.requireAck) {
-              // do not await
-              this.acknowledgeNotification({
-                messageId: envelope.messageId,
-                receivedAt: Date.now(),
-              });
-            }
-            await handler(envelope.pushEvent);
+          if (envelope?.decisionEvent?.ciphertext) {
+            await this.acknowledgeNotification({
+              messageId: envelope.messageId,
+              receivedAt: Date.now(),
+            });
+            await handler({ messageId: envelope.messageId, decisionEvent: envelope.decisionEvent });
           }
         } catch (parseError) {
           return;
         }
       }
 
-      // Stream ended naturally
       await this.reconnect();
     } catch (error) {
-      // Connection likely lost, trigger reconnection
       await this.reconnect();
       throw new NoxyNetworkError({ message: (error as Error).message });
     }
+  }
+
+  /**
+   * Send decision outcome to relay
+   */
+  async sendDecisionOutcome(payload: NoxyNetworkDecisionOutcomePayload): Promise<void> {
+    await this.sendNetworkMessage({
+      requestId: uuidv4(),
+      sessionId: this.#sessionId,
+      appId: this.#options.appId,
+      deviceId: this.#networkDeviceId,
+      timestamp: Date.now(),
+      nonce: this.generateNonce(),
+      payload,
+    });
   }
 }

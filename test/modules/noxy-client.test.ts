@@ -1,8 +1,10 @@
 import { beforeAll, beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { JSONStringify } from 'json-with-bigint';
 import { NoxyClientModule } from '@/modules/noxy-client';
-import { NoxyNotificationModule } from '@/modules/noxy-notification';
-import type { NoxyEncryptedNotification } from '@/modules/noxy-notification.types';
+import { NoxyDecisionRequestModule } from '@/modules/noxy-decision-request';
+import type { NoxyEncryptedDecisionRequest } from '@/modules/noxy-decision-request.types';
+import { NoxyDecisionOutcomeValues } from '@/modules/noxy-decision-request.types';
+import { encryptDecisionRequestForTest } from '@test/helpers/encrypt-decision-request-for-test';
 import { MockWebSocket } from '@test/__mocks__/websocket';
 import initMocks from '@test/__mocks__';
 import 'fake-indexeddb/auto';
@@ -91,7 +93,7 @@ describe('NoxyClientModule', () => {
     await client.close();
   });
 
-  it('client and notification module share same device module instance and device is loaded', async () => {
+  it('client and decision request module share same device module instance and device is loaded', async () => {
     const client = await NoxyClientModule.init({
       identity: mocks.testIdentity,
       network: {
@@ -107,12 +109,12 @@ describe('NoxyClientModule', () => {
     });
 
     const clientDeviceModule = (client as any).NoxyDeviceModule;
-    const notificationModule = (client as any).NoxyNotificationModule;
-    const notificationDeviceModule = (notificationModule as any).NoxyDeviceModule;
+    const decisionRequestModule = (client as any).NoxyDecisionRequestModule as NoxyDecisionRequestModule;
+    const decisionRequestDeviceModule = (decisionRequestModule as any).NoxyDeviceModule;
 
     expect(clientDeviceModule).toBeDefined();
-    expect(notificationDeviceModule).toBeDefined();
-    expect(clientDeviceModule).toBe(notificationDeviceModule);
+    expect(decisionRequestDeviceModule).toBeDefined();
+    expect(clientDeviceModule).toBe(decisionRequestDeviceModule);
 
     expect(clientDeviceModule.publicKey).toBeDefined();
     expect(clientDeviceModule.pqPublicKey).toBeDefined();
@@ -120,7 +122,7 @@ describe('NoxyClientModule', () => {
     await client.close();
   });
 
-  it('on(handler) should subscribe and pass decrypted plain object when relay sends encrypted notification', async () => {
+  it('on(handler) should decrypt decision request and invoke handler; submitDecisionOutcome sends to relay', async () => {
     const client = await NoxyClientModule.init({
       identity: mocks.testIdentity,
       network: {
@@ -135,30 +137,49 @@ describe('NoxyClientModule', () => {
       },
     });
 
-    const plainNotification = {
-      type: 'default',
-      title: 'Hello from relay',
-      message: 'Test body',
+    const plainDecision = {
+      decision_id: 'decision-test-1',
+      title: 'Approve action?',
       timestamp: Date.now(),
     };
 
-    const clientNotificationModule = (client as any).NoxyNotificationModule as NoxyNotificationModule;
-    const clientDeviceModule = (clientNotificationModule as any).NoxyDeviceModule;
+    const clientDecisionRequestModule = (client as any).NoxyDecisionRequestModule as NoxyDecisionRequestModule;
+    const clientDeviceModule = (clientDecisionRequestModule as any).NoxyDeviceModule;
+    const kyber = (clientDecisionRequestModule as any).NoxyKyberProvider;
     await clientDeviceModule.register(mocks.testAppId, mocks.testIdentityId, mocks.testIdentity.signer);
 
-    const plaintext = new TextEncoder().encode(JSONStringify(plainNotification));
-    const encrypted = await clientNotificationModule.encryptNotification(plaintext);
+    const plaintext = new TextEncoder().encode(JSONStringify(plainDecision));
+    const encrypted = await encryptDecisionRequestForTest(clientDeviceModule, kyber, plaintext);
 
-    const handler = vi.fn<(data: unknown) => void>();
     const networkModule = (client as any).NoxyNetworkModule;
-    vi.spyOn(networkModule, 'subscribeToNotifications').mockImplementation(async (fn: unknown) => {
-      await (fn as (n: NoxyEncryptedNotification) => Promise<void>)(encrypted);
+    vi.spyOn(networkModule, 'subscribeToDecisionRequests').mockImplementation(async (fn: unknown) => {
+      await (fn as (ctx: { messageId?: string; pushEvent: NoxyEncryptedDecisionRequest }) => Promise<void>)({
+        messageId: 'relay-msg-1',
+        pushEvent: encrypted,
+      });
     });
+
+    const sendDecisionOutcome = vi.spyOn(networkModule, 'sendDecisionOutcome').mockResolvedValue(undefined);
+
+    const handler = vi.fn().mockResolvedValue(undefined);
 
     await client.on(handler);
 
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0][0]).toEqual(plainNotification);
+    expect(handler.mock.calls[0][0]).toEqual(plainDecision);
+    expect(sendDecisionOutcome).not.toHaveBeenCalled();
+
+    await client.submitDecisionOutcome({
+      decision_id: 'decision-test-1',
+      outcome: NoxyDecisionOutcomeValues.APPROVE,
+      received_at: Date.now(),
+    });
+
+    expect(sendDecisionOutcome).toHaveBeenCalledWith({
+      decision_id: 'decision-test-1',
+      outcome: 'APPROVE',
+      received_at: expect.any(Number),
+    });
 
     await client.close();
   });

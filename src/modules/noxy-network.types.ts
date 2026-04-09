@@ -2,6 +2,7 @@ import type { UUIDTypes } from 'uuid';
 import type { Timestamp } from '@/modules/noxy-common.types';
 import type { WalletAddress } from '@/modules/noxy-identity.types';
 import type { NoxyDeviceId } from '@/modules/noxy-device.types';
+import type { NoxyDecisionOutcome } from '@/modules/noxy-decision-request.types';
 
 export type NoxyNetworkOptions = {
   /** App identifier issued by Noxy */
@@ -15,9 +16,6 @@ export type NoxyNetworkOptions = {
 
   /** Retry timeout (ms) */
   retryTimeoutMs?: number;
-
-  /** Fire-and-forget or require acknowledgement */
-  requireAck?: boolean;
 };
 
 export type NoxyNetworkMessage = {
@@ -33,7 +31,8 @@ export type NoxyNetworkMessage = {
     NoxyNetworkRevokeDevicePayload |
     NoxyNetworkRotateDeviceKeysPayload |
     NoxyNetworkSubscribeNotificationsPayload |
-    NoxyNetworkAckPayload
+    NoxyNetworkAckPayload |
+    NoxyNetworkDecisionOutcomePayload
 };
 
 export type NoxyNetworkAuthenticatePayload = {
@@ -101,6 +100,8 @@ export type NoxyNetworkAckPayload = {
   messageId: UUIDTypes,
   receivedAt: Timestamp,
 };
+
+export type NoxyNetworkDecisionOutcomePayload = NoxyDecisionOutcome;
 
 export type NoxyNetworkErrorResponse = {
   requestId: UUIDTypes;

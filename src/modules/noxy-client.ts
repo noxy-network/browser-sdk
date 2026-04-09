@@ -1,4 +1,5 @@
 import { base64 } from '@scure/base';
+import { type UUIDTypes } from 'uuid';
 import { NoxyInjectModule } from '@/modules/noxy-common.inject';
 import type { NoxyClientOptions } from '@/modules/noxy-client.types';
 import { NoxyIdentityModule } from '@/modules/noxy-identity';
@@ -8,11 +9,11 @@ import { useNoxyClientStateMachine } from '@/modules/noxy-client-state';
 import { NoxyNetworkModule } from '@/modules/noxy-network';
 import { NoxyClientStatusEnum } from '@/modules/noxy-client-state.types';
 import { NoxyGeneralError, NoxyInitializationError } from '@/modules/noxy-error';
-import { NoxyNotificationModule } from '@/modules/noxy-notification';
-import type { NoxyEncryptedNotification } from '@/modules/noxy-notification.types';
+import { NoxyDecisionRequestModule } from '@/modules/noxy-decision-request';
+import type { NoxyDecisionOutcome } from '@/modules/noxy-decision-request.types';
 import type { NoAny } from '@/modules/noxy-common.types';
 
-@NoxyInjectModule(NoxyNotificationModule, (options: NoxyClientOptions) => options.storage)
+@NoxyInjectModule(NoxyDecisionRequestModule, (options: NoxyClientOptions) => options.storage)
 @NoxyInjectModule(NoxyNetworkModule, (options: NoxyClientOptions) => options.network)
 @NoxyInjectModule(NoxyDeviceModule, (options: NoxyClientOptions) => options.storage)
 @NoxyInjectModule(NoxyIdentityModule, (options: NoxyClientOptions) => options.identity)
@@ -79,8 +80,8 @@ export class NoxyClientModule {
     return (this as any).NoxyNetworkModule as NoxyNetworkModule;
   }
 
-  get #noxyNotificationModule(): NoxyNotificationModule {
-    return (this as any).NoxyNotificationModule as NoxyNotificationModule;
+  get #noxyDecisionRequestModule(): NoxyDecisionRequestModule {
+    return (this as any).NoxyDecisionRequestModule as NoxyDecisionRequestModule;
   }
 
   get options(): NoxyClientOptions {
@@ -142,18 +143,24 @@ export class NoxyClientModule {
   }
 
   /**
-   * Subscribe to notifications from the Noxy network.
+   * Subscribe to encrypted decision requests: decrypt and invoke the handler (e.g. show UI).
+   * Send the outcome later with {@link submitDecisionOutcome}; the relay enforces idempotency.
    */
-  async on(handler: (data: unknown) => void): Promise<void> {
+  async on(handler: (decisionId: UUIDTypes, decision: unknown) => void | Promise<void>): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     await self.#noxyDeviceModule.loadDevicePrivateKeys();
-    await this.#noxyNetworkModule.subscribeToNotifications(async (envelope: NoxyEncryptedNotification) => {
-      const decryptedNotification = await self.#noxyNotificationModule.decryptNotification(envelope);
-      if (decryptedNotification) {
-        return handler(decryptedNotification);
-      }
+    await this.#noxyNetworkModule.subscribeToDecisionRequests(async ({ messageId, decisionEvent }) => {
+      if (!messageId) return;
+      const decrypted = await self.#noxyDecisionRequestModule.decryptDecisionRequest(decisionEvent);
+      if (!decrypted) return;
+      await handler(messageId, decrypted);
     });
+  }
+
+  /** Send APPROVE/REJECT for a decision to the relay (call when the user decides). */
+  async submitDecisionOutcome(payload: NoxyDecisionOutcome): Promise<void> {
+    await this.#noxyNetworkModule.sendDecisionOutcome(payload);
   }
 
   async close(): Promise<void> {
