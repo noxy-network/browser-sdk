@@ -51,7 +51,7 @@ npm install @noxy-network/browser-sdk
 
 - **IndexedDB**, **WebSocket**, and **Web Crypto API**
 - **ES modules** (or a bundler)
-- TypeScript types: `dist/index.d.ts`
+- TypeScript types: `dist/bundle.d.ts`
 
 ---
 
